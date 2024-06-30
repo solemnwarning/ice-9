@@ -107,6 +107,7 @@ static bool connection_read(int connection_idx);
 static bool connection_write(int connection_idx, unsigned char cmd, const void *payload, int payload_length);
 static bool connection_flush(int connection_idx);
 static void connection_close(int connection_idx);
+static char *path_search(const char *program_name);
 static void pipe_read(int connection_idx, PipeReadHandle *pipe9x_handle, unsigned char command);
 static void process_exit(int connection_idx);
 
@@ -261,7 +262,7 @@ static bool connection_read(int connection_idx)
 						
 						pipe9x_write_close(stdout_write);
 						pipe9x_read_close(stdout_read);
-						
+
 						pipe9x_write_close(stdin_write);
 						pipe9x_read_close(stdin_read);
 						
@@ -288,8 +289,29 @@ static bool connection_read(int connection_idx)
 					fprintf(stderr, "application_path = %s\n", connection->application_path);
 					fprintf(stderr, "command_line = %s\n", connection->command_line);
 					
+					const char *application_path = connection->application_path;
+					char *application_path_buf = NULL;
+					
+					if(
+						strchr(application_path, '\\') == NULL
+						&& GetFileAttributes(application_path) == INVALID_FILE_ATTRIBUTES)
+					{
+						/* application_path doesn't contain any slashes and doesn't appear
+						 * to exist in the working directory, search PATH for it.
+						*/
+						
+						fprintf(stderr, "[%d] %s not found, searching PATH...\n", connection->id, connection->application_path);
+						
+						application_path_buf = path_search(connection->application_path);
+						if(application_path_buf != NULL)
+						{
+							fprintf(stderr, "[%d] Found %s\n", connection->id, application_path_buf);
+							application_path = application_path_buf;
+						}
+					}
+					
 					if(CreateProcess(
-						connection->application_path,   /* lpApplicationName */
+						application_path,               /* lpApplicationName */
 						connection->command_line,       /* lpCommandLine */
 						NULL,                           /* lpProcessAttributes */
 						NULL,                           /* lpThreadAttributes */
@@ -314,9 +336,22 @@ static bool connection_read(int connection_idx)
 					else{
 						fprintf(stderr, "CreateProcess: %u\n", (unsigned)(GetLastError()));
 						
+						free(application_path_buf);
+						
+						/*
+						pipe9x_write_close(stderr_write);
+						pipe9x_read_close(stderr_read);
+						pipe9x_write_close(stdout_write);
+						pipe9x_read_close(stdout_read);
+						pipe9x_write_close(stdin_write);
+						pipe9x_read_close(stdin_read);
+						*/
+						
 						connection_close(connection_idx);
 						return false;
 					}
+					
+					free(application_path_buf);
 					
 					break;
 				}
@@ -491,6 +526,57 @@ static void connection_close(int connection_idx)
 	
 	memmove((connections + connection_idx), (connections + connection_idx + 1), (num_connections - connection_idx - 1));
 	--num_connections;
+}
+
+static char *path_search(const char *program_name)
+{
+	const char *PATH = getenv("PATH");
+	if(PATH == NULL)
+	{
+		return NULL;
+	}
+	
+	size_t PATH_LEN = strlen(PATH);
+	size_t pn_len = strlen(program_name);
+	
+	for(size_t i = 0; i < PATH_LEN; ++i)
+	{
+		size_t elem_len = strcspn((PATH + i), ";");
+		
+		if(elem_len > 0)
+		{
+			/* directory '\\' program name ".exe" '\0' */
+			char *path_buf = malloc(elem_len + 1 + pn_len + 5);
+			if(path_buf != NULL)
+			{
+				strncpy(path_buf, (PATH + i), elem_len);
+				path_buf[elem_len] = '\\';
+				path_buf[elem_len + 1] = '\0';
+				
+				strcat(path_buf, program_name);
+				
+				if(GetFileAttributes(path_buf) != INVALID_FILE_ATTRIBUTES)
+				{
+					/* Found it! */
+					return path_buf;
+				}
+				
+				strcat(path_buf, ".exe");
+				
+				if(GetFileAttributes(path_buf) != INVALID_FILE_ATTRIBUTES)
+				{
+					/* Found it! */
+					return path_buf;
+				}
+				
+				free(path_buf);
+			}
+			
+			i += elem_len;
+		}
+	}
+	
+	return NULL;
 }
 
 static void pipe_read(int connection_idx, PipeReadHandle *pipe9x_handle, unsigned char command)
