@@ -1,0 +1,4 @@
+*.o
+
+/ice9d.exe
+/ice9r

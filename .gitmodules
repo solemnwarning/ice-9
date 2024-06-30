@@ -1,0 +1,3 @@
+[submodule "pipe9x"]
+	path = pipe9x
+	url = https://github.com/solemnwarning/pipe9x.git
