@@ -189,6 +189,8 @@ static void stream_output(FILE *output, int sock, size_t length)
 		
 		length -= r;
 	}
+	
+	fflush(output);
 }
 
 int main(int argc, char **argv)
