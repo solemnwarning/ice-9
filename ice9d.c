@@ -229,7 +229,7 @@ static bool connection_read(int connection_idx)
 					PipeReadHandle stdin_read, stdout_read, stderr_read;
 					PipeWriteHandle stdin_write, stdout_write, stderr_write;
 					
-					DWORD pipe_error = pipe9x_create(&stdin_read, PIPE_READ_SIZE, NULL, &stdin_write, PIPE_READ_SIZE, NULL);
+					DWORD pipe_error = pipe9x_create(&stdin_read, PIPE_READ_SIZE, TRUE, &stdin_write, PIPE_READ_SIZE, FALSE);
 					if(pipe_error != ERROR_SUCCESS)
 					{
 						fprintf(stderr, "pipe9x_create: %u\n", (unsigned)(pipe_error));
@@ -238,7 +238,7 @@ static bool connection_read(int connection_idx)
 						return false;
 					}
 					
-					pipe_error = pipe9x_create(&stdout_read, PIPE_READ_SIZE, NULL, &stdout_write, PIPE_READ_SIZE, NULL);
+					pipe_error = pipe9x_create(&stdout_read, PIPE_READ_SIZE, FALSE, &stdout_write, PIPE_READ_SIZE, TRUE);
 					if(pipe_error != ERROR_SUCCESS)
 					{
 						fprintf(stderr, "pipe9x_create: %u\n", (unsigned)(pipe_error));
@@ -250,12 +250,7 @@ static bool connection_read(int connection_idx)
 						return false;
 					}
 					
-					if(pipe9x_read_initiate(stdout_read) != ERROR_IO_PENDING)
-					{
-						abort();
-					}
-					
-					pipe_error = pipe9x_create(&stderr_read, PIPE_READ_SIZE, NULL, &stderr_write, PIPE_READ_SIZE, NULL);
+					pipe_error = pipe9x_create(&stderr_read, PIPE_READ_SIZE, FALSE, &stderr_write, PIPE_READ_SIZE, TRUE);
 					if(pipe_error != ERROR_SUCCESS)
 					{
 						fprintf(stderr, "pipe9x_create: %u\n", (unsigned)(pipe_error));
@@ -268,11 +263,6 @@ static bool connection_read(int connection_idx)
 						
 						connection_close(connection_idx);
 						return false;
-					}
-					
-					if(pipe9x_read_initiate(stderr_read) != ERROR_IO_PENDING)
-					{
-						abort();
 					}
 					
 					STARTUPINFO si;
@@ -332,6 +322,16 @@ static bool connection_read(int connection_idx)
 						connection->stdin_pipe  = stdin_write;
 						connection->stdout_pipe = stdout_read;
 						connection->stderr_pipe = stderr_read;
+						
+						if(pipe9x_read_initiate(stdout_read) != ERROR_IO_PENDING)
+						{
+							abort();
+						}
+						
+						if(pipe9x_read_initiate(stderr_read) != ERROR_IO_PENDING)
+						{
+							abort();
+						}
 					}
 					else{
 						fprintf(stderr, "CreateProcess: %u\n", (unsigned)(GetLastError()));
