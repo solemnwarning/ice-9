@@ -504,13 +504,18 @@ static void connection_close(int connection_idx)
 		connection->process = NULL;
 	}
 	
-	pipe9x_write_close(connection->stdin_pipe);
+	/* We should close the pipes here, but due to a bug in Windows 98, the
+	 * reads may block forever and make us hang... so we just forget about
+	 * them and leave the handles/threads to block forever (#1).
+	*/
+	
+	// pipe9x_write_close(connection->stdin_pipe);
 	connection->stdin_pipe = NULL;
 	
-	pipe9x_read_close(connection->stderr_pipe);
+	// pipe9x_read_close(connection->stderr_pipe);
 	connection->stderr_pipe = NULL;
 	
-	pipe9x_read_close(connection->stdout_pipe);
+	// pipe9x_read_close(connection->stdout_pipe);
 	connection->stdout_pipe = NULL;
 	
 	free(connection->working_directory);
