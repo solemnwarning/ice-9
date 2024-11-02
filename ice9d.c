@@ -158,7 +158,7 @@ static bool connection_read(int connection_idx)
 	{
 		if(read_bytes == 0)
 		{
-			fprintf(stderr, "Connection closed (end of file)\n");
+			fprintf(stderr, "[%d] Connection closed (end of file)\n", connection->id);
 		}
 		else{
 			DWORD error = WSAGetLastError();
@@ -168,7 +168,7 @@ static bool connection_read(int connection_idx)
 				return true;
 			}
 			else{
-				fprintf(stderr, "Connection read error %u\n", (unsigned)(error));
+				fprintf(stderr, "[%d] Connection read error %u\n", connection->id, (unsigned)(error));
 			}
 		}
 		
@@ -529,7 +529,7 @@ static void connection_close(int connection_idx)
 	
 	fprintf(stderr, "[%d] Connection closed\n", connection->id);
 	
-	memmove((connections + connection_idx), (connections + connection_idx + 1), (num_connections - connection_idx - 1));
+	memmove((connections + connection_idx), (connections + connection_idx + 1), ((num_connections - connection_idx - 1) * sizeof(*connections)));
 	--num_connections;
 }
 
