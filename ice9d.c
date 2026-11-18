@@ -368,6 +368,8 @@ static bool connection_process_received(int connection_idx)
 				{
 					if(header->payload_length == 0)
 					{
+						fprintf(stderr, "[%d] Closing child stdin\n", connection->id);
+						
 						pipe9x_write_close(connection->stdin_pipe);
 						connection->stdin_pipe = NULL;
 					}
@@ -375,11 +377,13 @@ static bool connection_process_received(int connection_idx)
 					{
 						if(pipe9x_write_pending(connection->stdin_pipe))
 						{
+							// fprintf(stderr, "[%d] Not ready to write to child stdin\n", connection->id);
+							
 							/* Stall until current write on stdin pipe completes. */
 							return true;
 						}
 						
-						// fprintf(stderr, "[%d] Writing %u bytes to child stdin\n", connection->id, (unsigned)(header->payload_length));
+						fprintf(stderr, "[%d] Writing %u bytes to child stdin\n", connection->id, (unsigned)(header->payload_length));
 						
 						DWORD error = pipe9x_write_initiate(connection->stdin_pipe, payload, header->payload_length);
 						if(error != ERROR_IO_PENDING)
@@ -594,6 +598,21 @@ static char *path_search(const char *program_name)
 
 static void pipe_read(int connection_idx, PipeReadHandle *pipe9x_handle, unsigned char command)
 {
+	const char *stream;
+	switch(command)
+	{
+		case 'O':
+			stream = "stdout";
+			break;
+			
+		case 'E':
+			stream = "stderr";
+			break;
+		
+		default:
+			abort();
+	}
+	
 	void *data;
 	size_t data_size;
 	
@@ -622,7 +641,7 @@ static void pipe_read(int connection_idx, PipeReadHandle *pipe9x_handle, unsigne
 			return;
 		}
 		
-		// printf("[%d] Read %u bytes from child on %c\n", connections[connection_idx].id, (unsigned)(data_size), command);
+		fprintf(stderr, "[%d] Read %u bytes from child %s\n", connections[connection_idx].id, (unsigned)(data_size), stream);
 	}
 	else if(error == ERROR_BROKEN_PIPE)
 	{
@@ -632,7 +651,7 @@ static void pipe_read(int connection_idx, PipeReadHandle *pipe9x_handle, unsigne
 		 * We will send a zero-byte read to the client.
 		*/
 		
-		printf("[%d] Read EOF from child on %c\n", connections[connection_idx].id, command);
+		printf("[%d] Read EOF from child %s\n", connections[connection_idx].id, stream);
 		
 		pipe9x_read_close(*pipe9x_handle);
 		*pipe9x_handle = NULL;
@@ -640,7 +659,7 @@ static void pipe_read(int connection_idx, PipeReadHandle *pipe9x_handle, unsigne
 		data_size = 0;
 	}
 	else{
-		printf("[%d] Read error %u from child on %c\n", connections[connection_idx].id, (unsigned)(error), command);
+		printf("[%d] Read error %u from child %s\n", connections[connection_idx].id, (unsigned)(error), stream);
 		connection_close(connection_idx);
 		
 		return;
@@ -795,6 +814,8 @@ int main()
 			
 			WSAEventSelect(connections[i].sock, wsevent, events);
 		}
+		
+		// fprintf(stderr, "Waiting for data...\n");
 		
 		DWORD wait_result = WaitForMultipleObjects(num_wait_handles, wait_handles, FALSE, INFINITE);
 		
