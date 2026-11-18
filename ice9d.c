@@ -1,5 +1,5 @@
 /* ice9d - Remote command execution server for Windows 9x
- * Copyright (C) 2024 Daniel Collins <solemnwarning@solemnwarning.net>
+ * Copyright (C) 2024-2026 Daniel Collins <solemnwarning@solemnwarning.net>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -104,6 +104,7 @@ static size_t num_connections = 0;
 static void connection_init(int newsock);
 static bool store_string(char **dst, const char *src, size_t length);
 static bool connection_read(int connection_idx);
+static bool connection_process_received(int connection_idx);
 static bool connection_write(int connection_idx, unsigned char cmd, const void *payload, int payload_length);
 static bool connection_flush(int connection_idx);
 static void connection_close(int connection_idx);
@@ -177,6 +178,13 @@ static bool connection_read(int connection_idx)
 	}
 	
 	connection->recvbuf_used += read_bytes;
+	
+	return connection_process_received(connection_idx);
+}
+
+static bool connection_process_received(int connection_idx)
+{
+	struct Connection *connection = &(connections[connection_idx]);
 	
 	while(connection->recvbuf_used >= sizeof(struct MessageHeader))
 	{
@@ -847,6 +855,9 @@ int main()
 					}
 					else{
 						// fprintf(stderr, "[%d] Wrote %u bytes to child stdin\n", connections[i].id, (unsigned)(data_written));
+						
+						/* Start a new write to stdin if more data is waiting. */
+						connection_process_received(i);
 					}
 					
 					break;
